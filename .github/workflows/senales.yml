@@ -1,0 +1,36 @@
+name: Senales
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # cada 5 minutos (GitHub a veces se atrasa unos minutos)
+  workflow_dispatch:         # botón "Run workflow" para correrlo a mano
+
+permissions:
+  contents: write            # para guardar estado.json en el repositorio
+
+concurrency:
+  group: senales
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Revisar mercados
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 bot.py
+
+      - name: Guardar estado
+        run: |
+          git config user.name "bot-senales"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add estado.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Actualizar estado del bot"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
