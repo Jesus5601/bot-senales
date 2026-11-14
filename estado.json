@@ -1,5 +1,7 @@
 {
   "iniciado": true,
-  "ultimo_avisado": {},
+  "ultimo_avisado": {
+    "XRPUSDT_15m": 1794664800000
+  },
   "version": 2
 }
