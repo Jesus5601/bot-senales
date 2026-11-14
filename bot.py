@@ -244,8 +244,10 @@ def armar_aviso(moneda, tf, vela, ev, ahora_ms):
         return None
 
     cierre_vela_ms = vela["t"] + MS_POR_TF[tf]
-    hora = datetime.fromtimestamp(cierre_vela_ms / 1000, ZONA_LIMA).strftime("%d/%m %H:%M")
-    lineas.append(f"Vela de {tf} cerrada {hora} (Lima)")
+    abre = datetime.fromtimestamp(vela["t"] / 1000, ZONA_LIMA)
+    cierra = datetime.fromtimestamp(cierre_vela_ms / 1000, ZONA_LIMA)
+    # En TradingView la vela aparece con su hora de apertura.
+    lineas.append(f"Vela {tf} de las {abre:%H:%M} (cerró {cierra:%H:%M}, {cierra:%d/%m}, hora Lima)")
     atraso_min = (ahora_ms - cierre_vela_ms) / 60_000
     if atraso_min > 10:
         lineas.append(f"⚠️ Aviso atrasado {atraso_min:.0f} min")
@@ -303,6 +305,14 @@ def main(ahora_ms=None):
         sys.exit("Falta el secreto NTFY_TOPIC: créalo en Settings → Secrets and variables → Actions.")
 
     ahora_ms = ahora_ms or int(time.time() * 1000)
+
+    if os.environ.get("ENVIAR_PRUEBA") == "true":
+        hora = datetime.fromtimestamp(ahora_ms / 1000, ZONA_LIMA)
+        enviar_ntfy("✅ Prueba desde GitHub",
+                    f"Si ves esto, el bot puede enviarte avisos. ({hora:%d/%m %H:%M}, hora Lima)",
+                    prioridad=4, etiquetas=["white_check_mark"])
+        print("Prueba enviada")
+        return
 
     horas_diag = float(os.environ.get("DIAGNOSTICO_HORAS") or 0)
     if horas_diag > 0:
