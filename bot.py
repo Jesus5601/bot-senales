@@ -12,6 +12,7 @@ Solo usa la librería estándar de Python: no hay que instalar nada.
 import json
 import math
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -270,6 +271,9 @@ def guardar_estado(estado):
 # ----------------------------- Main -----------------------------
 
 def main(ahora_ms=None):
+    if os.environ.get("GITHUB_ACTIONS") and not os.environ.get("NTFY_TOPIC", "").strip():
+        sys.exit("Falta el secreto NTFY_TOPIC: créalo en Settings → Secrets and variables → Actions.")
+
     ahora_ms = ahora_ms or int(time.time() * 1000)
     estado = cargar_estado()
     ultimo_avisado = estado.setdefault("ultimo_avisado", {})
