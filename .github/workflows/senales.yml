@@ -2,8 +2,13 @@ name: Senales
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # cada 5 minutos (GitHub a veces se atrasa unos minutos)
-  workflow_dispatch:         # botón "Run workflow" para correrlo a mano
+    - cron: "*/5 * * * *"   # respaldo: GitHub no garantiza este horario
+  workflow_dispatch:         # lo dispara cron-job.org cada 5 min (o el botón "Run workflow")
+    inputs:
+      diagnostico_horas:
+        description: "Solo listar los avisos de las últimas N horas (sin enviarlos). Vacío = normal."
+        required: false
+        default: ""
 
 permissions:
   contents: write            # para guardar estado.json en el repositorio
@@ -18,10 +23,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: main          # siempre el estado.json más reciente
 
       - name: Revisar mercados
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          DIAGNOSTICO_HORAS: ${{ github.event.inputs.diagnostico_horas }}
         run: python3 bot.py
 
       - name: Guardar estado
@@ -31,6 +39,6 @@ jobs:
           git add estado.json
           if ! git diff --cached --quiet; then
             git commit -m "Actualizar estado del bot"
-            git pull --rebase origin "$GITHUB_REF_NAME"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi

@@ -268,6 +268,34 @@ def guardar_estado(estado):
         f.write("\n")
 
 
+# -------------------------- Diagnóstico --------------------------
+
+def diagnostico(ahora_ms, horas):
+    """Lista (sin enviar nada ni tocar estado.json) los avisos de las últimas `horas`."""
+    desde = ahora_ms - horas * 3_600_000
+    print(f"DIAGNOSTICO: avisos que habrían salido en las últimas {horas:g} horas")
+    total = 0
+    for moneda in MONEDAS:
+        for tf in TEMPORALIDADES:
+            try:
+                velas, _ = obtener_velas(moneda, tf, ahora_ms)
+            except Exception as e:  # noqa: BLE001
+                print(f"DIAG ERROR {moneda} {tf}: {e}")
+                continue
+            eventos = indicador.simular(velas, AJUSTES_INDICADOR)
+            for i, vela in enumerate(velas):
+                if vela["t"] + MS_POR_TF[tf] < desde:
+                    continue
+                for ev in eventos[i]:
+                    aviso = armar_aviso(moneda, tf, vela, ev, ahora_ms)
+                    if aviso:
+                        total += 1
+                        hora = datetime.fromtimestamp((vela["t"] + MS_POR_TF[tf]) / 1000, ZONA_LIMA)
+                        print(f"DIAG {hora:%d/%m %H:%M} | {aviso[0]} | "
+                              + aviso[1].split("\n")[1 if ev["tipo"] == "entrada" else 3])
+    print(f"DIAG TOTAL: {total}")
+
+
 # ----------------------------- Main -----------------------------
 
 def main(ahora_ms=None):
@@ -275,6 +303,12 @@ def main(ahora_ms=None):
         sys.exit("Falta el secreto NTFY_TOPIC: créalo en Settings → Secrets and variables → Actions.")
 
     ahora_ms = ahora_ms or int(time.time() * 1000)
+
+    horas_diag = float(os.environ.get("DIAGNOSTICO_HORAS") or 0)
+    if horas_diag > 0:
+        diagnostico(ahora_ms, horas_diag)
+        return
+
     estado = cargar_estado()
     ultimo_avisado = estado.setdefault("ultimo_avisado", {})
 
