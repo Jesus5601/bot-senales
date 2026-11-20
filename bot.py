@@ -31,7 +31,7 @@ MONEDAS = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT",
     "SHIBUSDT", "XRPUSDT", "DOGEUSDT", "LINKUSDT",
 ]
-TEMPORALIDADES = ["15m", "1h", "4h"]
+TEMPORALIDADES = ["1h", "4h", "1d"]   # disponibles: 15m, 1h, 4h, 1d
 
 # Qué avisos quieres recibir
 AVISAR_ENTRADAS = True              # COMPRA / VENTA (con % de acierto y TP sugerido)
@@ -60,12 +60,12 @@ SIMBOLO_TRADINGVIEW = {"SHIBUSDT": "BINANCE:1000SHIBUSDT.P"}
 MAX_VELAS_ATRASADAS = 3
 HORAS_ENTRE_AVISOS_DE_ERROR = 6
 ARCHIVO_ESTADO = "estado.json"
-VERSION = 2
+VERSION = 3
 ZONA_LIMA = timezone(timedelta(hours=-5))
 
 # =============================================================
 
-MS_POR_TF = {"15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000}
+MS_POR_TF = {"15m": 15 * 60_000, "1h": 60 * 60_000, "4h": 4 * 60 * 60_000, "1d": 24 * 60 * 60_000}
 LETRAS_TP = ["TP1", "TP2", "TP3"]
 
 
@@ -115,7 +115,7 @@ def velas_binance(moneda, tf, total):
 def velas_okx(moneda, tf, total):
     # Respaldo: perpetuos de OKX (solo 300 velas: el % de acierto sale con menos historial).
     inst = moneda[:-4] + "-USDT-SWAP"
-    barra = {"15m": "15m", "1h": "1H", "4h": "4H"}[tf]
+    barra = {"15m": "15m", "1h": "1H", "4h": "4H", "1d": "1Dutc"}[tf]
     url = ("https://www.okx.com/api/v5/market/candles"
            f"?instId={inst}&bar={barra}&limit=300")
     datos = http_json(url).get("data") or []
@@ -298,6 +298,55 @@ def diagnostico(ahora_ms, horas):
     print(f"DIAG TOTAL: {total}")
 
 
+# --------------------------- Reporte ----------------------------
+
+def reporte(ahora_ms, desde_ms, temporalidades):
+    """Imprime (una línea JSON por evento) cómo terminó cada señal desde `desde_ms`:
+    entradas -> ganada/perdida/abierta según los TP/SL del indicador;
+    posibles -> si el cruce se dio en las velas siguientes."""
+    ajustes = dict(indicador.AJUSTES_POR_DEFECTO, **AJUSTES_INDICADOR)
+    for moneda in MONEDAS:
+        for tf in temporalidades:
+            try:
+                velas, _ = obtener_velas(moneda, tf, ahora_ms)
+            except Exception as e:  # noqa: BLE001
+                print(f"REP ERROR {moneda} {tf}: {e}")
+                continue
+            final = {}
+            eventos = indicador.simular(velas, AJUSTES_INDICADOR, estado_final=final)
+            cierres = {ev["barra_entrada"]: ev for es in eventos for ev in es if ev["tipo"] == "cierre"}
+            ultimo = len(velas) - 1
+            for i, vela in enumerate(velas):
+                if vela["t"] < desde_ms:
+                    continue
+                for ev in eventos[i]:
+                    fila = {"k": f"{moneda}_{tf}", "t": vela["t"], "tipo": ev["tipo"], "dir": ev["dir"]}
+                    if ev["tipo"] == "entrada":
+                        fila["acierto_mostrado"] = (round(ev["ganadas"] * 100 / ev["total_ops"], 1)
+                                                    if ev["total_ops"] else None)
+                        fila["estrellas"] = ev["estrellas"]
+                        c = cierres.get(i)
+                        if c:
+                            fila.update(estado="ganada" if c["resultado_pct"] > 0 else "perdida",
+                                        pct=round(c["resultado_pct"], 3), tps=c["tps_tocados"])
+                        elif final.get("en_pos") and final.get("barra_entrada") == i:
+                            px = velas[ultimo]["c"]
+                            p = final["pnl_realizado"] + (px - final["entrada"]) * final["dir"] * final["cant_restante"]
+                            fila.update(estado="abierta", pct=round(p / final["entrada"] * 100, 3),
+                                        tps=final["tps_tocados"])
+                        else:
+                            fila.update(estado="sin_dato")
+                    elif ev["tipo"] == "posible":
+                        ventana = range(i + 1, min(i + 1 + ajustes["velasPosible"], len(velas)))
+                        se_dio = any(e2["tipo"] == "entrada" and e2["dir"] == ev["dir"]
+                                     for j in ventana for e2 in eventos[j])
+                        fila["estado"] = ("convertida" if se_dio else
+                                          "pendiente" if len(ventana) < ajustes["velasPosible"] else "no")
+                    else:
+                        continue
+                    print("REP " + json.dumps(fila))
+
+
 # ----------------------------- Main -----------------------------
 
 def main(ahora_ms=None):
@@ -312,6 +361,14 @@ def main(ahora_ms=None):
                     f"Si ves esto, el bot puede enviarte avisos. ({hora:%d/%m %H:%M}, hora Lima)",
                     prioridad=4, etiquetas=["white_check_mark"])
         print("Prueba enviada")
+        return
+
+    if os.environ.get("REPORTE_DESDE"):
+        desde = datetime.fromisoformat(os.environ["REPORTE_DESDE"])
+        if desde.tzinfo is None:
+            desde = desde.replace(tzinfo=ZONA_LIMA)
+        tfs = [x.strip() for x in (os.environ.get("REPORTE_TFS") or ",".join(TEMPORALIDADES)).split(",") if x.strip()]
+        reporte(ahora_ms, int(desde.timestamp() * 1000), tfs)
         return
 
     horas_diag = float(os.environ.get("DIAGNOSTICO_HORAS") or 0)

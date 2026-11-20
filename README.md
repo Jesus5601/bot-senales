@@ -8,7 +8,7 @@ Bot que reproduce el indicador de TradingView **"Backtester Universal de Señale
 Opcionales (apagados): cambios de tendencia por ruptura de barrera fuerte y cierres de operación.
 
 - **Monedas:** BTC, ETH, BNB, SOL, SHIB, XRP, DOGE, LINK (contra USDT)
-- **Temporalidades:** 15m, 1h y 4h
+- **Temporalidades:** 1h, 4h y 1d (diaria; también se puede usar 15m)
 - **Datos:** Binance, últimas ~5000 velas (respaldo: perpetuos de OKX)
 - **Corre en:** GitHub Actions cada ~5 minutos, gratis; no necesitas tener la PC encendida
 

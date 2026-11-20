@@ -219,11 +219,12 @@ class _Barrera:
         self.precio, self.tipo, self.toques, self.ancho = precio, tipo, 1, ancho
 
 
-def simular(velas, ajustes=None):
+def simular(velas, ajustes=None, estado_final=None):
     """
     velas: lista de dicts {"t","o","h","l","c","v"} de la más antigua a la más nueva
            (solo velas cerradas).
     Devuelve una lista del mismo largo: en cada posición, la lista de eventos de esa vela.
+    Si se pasa un dict en estado_final, se llena con la operación abierta al terminar.
     """
     a = dict(AJUSTES_POR_DEFECTO)
     a.update(ajustes or {})
@@ -267,6 +268,7 @@ def simular(velas, ajustes=None):
     tps = [_Nivel(True) for _ in range(3)]
     sls = [_Nivel(False) for _ in range(3)]
     en_pos, dir_op, entrada, cant, pnl = False, 0, 0.0, 0.0, 0.0
+    idx_entrada = -1
     total_ops, ganadas = 0, 0
     tp_hits = [0, 0, 0]
     pos_c_prev = pos_v_prev = False
@@ -376,6 +378,8 @@ def simular(velas, ajustes=None):
                     eventos[i].append({
                         "tipo": "cierre", "dir": dir_op, "entrada": entrada,
                         "resultado_pct": pnl / entrada * 100 if entrada else 0.0,
+                        "barra_entrada": idx_entrada,
+                        "tps_tocados": sum(1 for nv in tps if nv.activo and nv.tocado),
                         **estadistica(),
                     })
 
@@ -384,6 +388,7 @@ def simular(velas, ajustes=None):
             nueva = 1 if (senal_c and puede_comprar) else (-1 if (senal_v and puede_vender) else 0)
             if nueva:
                 en_pos, dir_op, entrada, cant, pnl = True, nueva, ci, 1.0, 0.0
+                idx_entrada = i
 
                 sl_dist = next((d for u, d in zip(usar_sls, d_sls) if u), 0.0)
                 mejor_v, mejor_tp, mejor_tasa = -1.0e12, 0, 0.0
@@ -446,4 +451,10 @@ def simular(velas, ajustes=None):
         if cambio_baj:
             eventos[i].append({"tipo": "cambio", "dir": -1, "precio": ci})
 
+    if estado_final is not None:
+        estado_final.update({
+            "en_pos": en_pos, "dir": dir_op, "entrada": entrada, "barra_entrada": idx_entrada,
+            "pnl_realizado": pnl, "cant_restante": cant,
+            "tps_tocados": sum(1 for nv in tps if nv.activo and nv.tocado),
+        })
     return eventos

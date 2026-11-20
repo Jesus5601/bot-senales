@@ -9,6 +9,14 @@ on:
         description: "Solo listar los avisos de las últimas N horas (sin enviarlos). Vacío = normal."
         required: false
         default: ""
+      reporte_desde:
+        description: "Solo calcular cómo terminaron las señales desde esta fecha (ej. 2026-11-14T00:00). Vacío = normal."
+        required: false
+        default: ""
+      reporte_tfs:
+        description: "Temporalidades del reporte, separadas por coma (vacío = las actuales)"
+        required: false
+        default: ""
       prueba:
         description: "Enviar solo una notificación de prueba al celular"
         type: boolean
@@ -35,6 +43,8 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           DIAGNOSTICO_HORAS: ${{ github.event.inputs.diagnostico_horas }}
           ENVIAR_PRUEBA: ${{ github.event.inputs.prueba }}
+          REPORTE_DESDE: ${{ github.event.inputs.reporte_desde }}
+          REPORTE_TFS: ${{ github.event.inputs.reporte_tfs }}
         run: python3 bot.py
 
       - name: Guardar estado
